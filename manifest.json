@@ -3,6 +3,12 @@
     "name":  "WCounter",
     "version":  "1.2.2",
     "description":  "Conta i messaggi inviati e ricevuti in una chat WhatsApp selezionata.",
+    "icons": {
+                   "16": "icons/16.png",
+                   "32": "icons/32.png",
+                   "48": "icons/48.png",
+                   "128": "icons/128.png"
+                },
     "permissions":  [
                         "storage",
                         "activeTab"
@@ -12,6 +18,10 @@
                          ],
     "action":  {
                    "default_title":  "WCounter",
+                   "default_icon": {
+                       "16": "icons/16.png",
+                       "32": "icons/32.png"
+                   },
                    "default_popup":  "popup.html"
                },
     "background": {
