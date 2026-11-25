@@ -4,6 +4,10 @@
   const SETTINGS = 'wcounter:selectedChat';
   const status = document.getElementById('status');
   const fileInput = document.getElementById('backup-file');
+  const today = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
 
   async function returnToWhatsApp() {
     const params = new URLSearchParams(location.search);
@@ -56,7 +60,12 @@
       const merged = { ...(current[KEY] || {}) };
       for (const [key, incoming] of incomingRows) {
         const existing = merged[key];
-        if (!existing) { merged[key] = incoming; continue; }
+        if (!existing) {
+          incoming.ids = [...new Set([...incoming.ids, ...incoming.messageHashes])];
+          delete incoming.messageHashes;
+          merged[key] = incoming;
+          continue;
+        }
         merged[key] = {
           ...existing,
           ...incoming,
@@ -65,10 +74,19 @@
           ids: [...new Set([...(Array.isArray(existing.ids) ? existing.ids : []), ...incoming.ids])],
           messageHashes: [...new Set([...(Array.isArray(existing.messageHashes) ? existing.messageHashes : []), ...incoming.messageHashes])]
         };
+        merged[key].ids = [...new Set([...merged[key].ids, ...merged[key].messageHashes])];
+        delete merged[key].messageHashes;
         if (existing.lastMessage?.timestamp > (incoming.lastMessage?.timestamp || '')) merged[key].lastMessage = existing.lastMessage;
       }
 
       const importedChats = new Map(incomingRows.map(([, row]) => [row.chatId, { id: row.chatId, name: row.chatName || row.chatId }]));
+      for (const row of Object.values(merged)) {
+        if (row.day !== today()) {
+          delete row.ids;
+          delete row.messageHashes;
+          delete row.lastMessage;
+        }
+      }
       const selected = current[SETTINGS];
       const nextSelected = selected && importedChats.has(selected.id) ? selected : importedChats.values().next().value;
       await api.storage.local.set({ [KEY]: merged, [SETTINGS]: nextSelected });

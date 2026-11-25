@@ -163,10 +163,25 @@
       const elements = messageElements();
       if (!elements.length) return;
       const days = stored[KEY] || {};
+      const today = localDay();
+      const existingDayKeys = new Set(Object.keys(days));
       let changed = false;
-      // Migrate legacy deduplication keys to hashes so old fallback keys never enter backups as text.
       for (const row of Object.values(days)) {
+        if (row.day !== today) {
+          if (row.ids || row.messageHashes || row.lastMessage) {
+            delete row.ids;
+            delete row.messageHashes;
+            delete row.lastMessage;
+            changed = true;
+          }
+          continue;
+        }
         if (!Array.isArray(row.ids)) row.ids = [];
+        if (Array.isArray(row.messageHashes)) {
+          row.ids = [...new Set([...row.ids, ...row.messageHashes])];
+          delete row.messageHashes;
+          changed = true;
+        }
         for (let i = 0; i < row.ids.length; i++) {
           if (!/^[a-f0-9]{64}$/i.test(row.ids[i])) {
             row.ids[i] = await sha256(row.ids[i]);
@@ -174,6 +189,7 @@
           }
         }
       }
+      const seenThisScan = new Set();
       for (const el of elements) {
         const direction = directionOf(el);
         if (!direction) continue;
@@ -181,47 +197,47 @@
         const meta = metaElement?.getAttribute('data-pre-plain-text') || '';
         if (!withinCountingHours(meta)) continue;
         const container = el.closest('[data-id]') || el.querySelector('[data-id]') || el;
-        const messageId = container?.getAttribute('data-id') || meta || await sha256(clean(el.textContent).normalize('NFKC'));
+        const dataMessageId = container?.getAttribute('data-id') || '';
+        const messageText = clean(el.textContent).normalize('NFKC');
+        const previousMessageId = dataMessageId || meta || await sha256(messageText);
+        const messageId = dataMessageId || `${meta}|${messageText}`;
         const day = messageDay(meta);
         const key = `${selected.id}|${day}`;
-        const row = days[key] || { chatId: selected.id, chatName: selected.name, day, sent: 0, received: 0, ids: [] };
-        if (!Array.isArray(row.ids)) row.ids = [];
-        const rawDedupeId = `${direction}:${messageId}`;
-        const dedupeId = await sha256(rawDedupeId);
+        if (day !== today && existingDayKeys.has(key)) continue;
+        const row = days[key] || {
+          chatId: selected.id, chatName: selected.name, day, sent: 0, received: 0,
+          ...(day === today ? { ids: [] } : {})
+        };
+        if (day === today && !Array.isArray(row.ids)) row.ids = [];
         const timestamp = messageTimestamp(meta, day);
         const textHash = await sha256(clean(el.textContent).normalize('NFKC'));
-        const messageHash = await sha256(`${direction}|${timestamp}|${messageId}|${textHash}`);
-        if (!Array.isArray(row.messageHashes)) row.messageHashes = [];
-        if (row.messageHashes.includes(messageHash)) continue;
-        if (row.ids.includes(dedupeId)) {
-          row.messageHashes.push(messageHash);
-          days[key] = row;
-          changed = true;
-          continue;
-        }
-        if (row.lastMessage?.timestamp === timestamp && row.lastMessage?.hash === textHash && row.lastMessage?.direction === direction) {
-          row.ids.push(dedupeId);
-          days[key] = row;
-          changed = true;
-          continue;
-        }
-        const legacyMessageId = container?.getAttribute('data-id') || meta || `${meta}|${clean(el.textContent).slice(0, 200)}`;
-        const legacyDedupeId = await sha256(`${direction}:${legacyMessageId}`);
-        if (row.ids.includes(legacyDedupeId)) {
-          row.ids[row.ids.indexOf(legacyDedupeId)] = dedupeId;
+        if (day === today) {
+          const stableHash = await sha256(`${direction}:${messageId}`);
+          const oldIdentityHash = await sha256(`${direction}:${previousMessageId}`);
+          const oldFingerprintHash = await sha256(`${direction}|${timestamp}|${previousMessageId}|${textHash}`);
+          const legacyMessageId = dataMessageId || meta || `${meta}|${messageText.slice(0, 200)}`;
+          const legacyIdentityHash = await sha256(`${direction}:${legacyMessageId}`);
+          if (row.ids.includes(stableHash)) continue;
+          const priorIndex = row.ids.findIndex(id => id === oldIdentityHash || id === oldFingerprintHash || id === legacyIdentityHash);
+          if (priorIndex !== -1) {
+            row.ids[priorIndex] = stableHash;
+            days[key] = row;
+            changed = true;
+            continue;
+          }
+          row.ids.push(stableHash);
           if (!row.lastMessage || timestamp >= row.lastMessage.timestamp) {
             row.lastMessage = { hash: textHash, timestamp, direction };
           }
-          days[key] = row;
-          changed = true;
-          continue;
+        } else {
+          const scanKey = `${key}|${direction}|${timestamp}|${messageId}|${textHash}`;
+          if (seenThisScan.has(scanKey)) continue;
+          seenThisScan.add(scanKey);
+          delete row.ids;
+          delete row.messageHashes;
+          delete row.lastMessage;
         }
-        row.ids.push(dedupeId);
-        row.messageHashes.push(messageHash);
         row[direction]++;
-        if (!row.lastMessage || timestamp >= row.lastMessage.timestamp) {
-          row.lastMessage = { hash: textHash, timestamp, direction };
-        }
         days[key] = row;
         changed = true;
       }
@@ -245,6 +261,11 @@
   });
 
   api.runtime.onMessage.addListener((message, _sender, respond) => {
+    if (message?.type === 'wcounter:scan-now') {
+      schedule();
+      respond({ ok: true });
+      return false;
+    }
     if (message?.type === 'wcounter:list-chats') {
       respond({ chats: listChats(), activeName: activeTitles()[0] || '' });
       return false;

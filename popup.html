@@ -13,6 +13,10 @@
       <div class="history-head"><span>Giornata</span><span>Inviati</span><span>Ricevuti</span><span>Totale</span></div><div id="rows"></div><div id="empty" class="empty hidden">Nessun messaggio registrato per questa chat.</div>
     </section>
     <section id="settings" class="panel hidden">
+      <div class="settings-title">Conteggio</div>
+      <p class="settings-copy">Azzera i conteggi di oggi per la chat selezionata, poi scorri la cronologia: i messaggi di oggi verranno ricontati una sola volta.</p>
+      <button id="reset-today" class="settings-button secondary">Azzera conteggio di oggi</button>
+      <div id="reset-status" class="backup-status" aria-live="polite"></div>
       <div class="settings-title">Backup dello storico</div>
       <p class="settings-copy">Chrome: scegli un file una volta e WCounter lo aggiorna a ogni conteggio. Firefox: usa il salvataggio manuale, perché non consente l’aggiornamento automatico di un file scelto.</p>
       <button id="export-history" class="settings-button">Scegli file e attiva backup</button>

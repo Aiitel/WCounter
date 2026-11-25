@@ -3,7 +3,12 @@
   const DATA_KEY = 'wcounter:days';
   const DB_NAME = 'wcounter-file-backup';
   const STORE = 'handles';
+  const MIDNIGHT_ALARM = 'wcounter-midnight-prune';
   let writeQueue = Promise.resolve();
+  const todayKey = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
 
   function openDb() {
     return new Promise((resolve, reject) => {
@@ -28,17 +33,21 @@
   }
   async function backupDays(source) {
     const result = {};
+    const today = todayKey();
     for (const [key, row] of Object.entries(source || {})) {
-      const ids = Array.isArray(row.ids) ? await Promise.all(row.ids.map(id => /^[a-f0-9]{64}$/i.test(id) ? id : hashLegacyId(id))) : [];
+      const existingIds = row.day === today ? [
+        ...(Array.isArray(row.ids) ? row.ids : []),
+        ...(Array.isArray(row.messageHashes) ? row.messageHashes : [])
+      ] : [];
+      const ids = [...new Set(await Promise.all(existingIds.map(id => /^[a-f0-9]{64}$/i.test(id) ? id : hashLegacyId(id))))];
       result[key] = {
         chatId: row.chatId,
         chatName: row.chatName,
         day: row.day,
         sent: Number(row.sent) || 0,
         received: Number(row.received) || 0,
-        ids,
-        messageHashes: Array.isArray(row.messageHashes) ? row.messageHashes.filter(hash => /^[a-f0-9]{64}$/i.test(hash)) : [],
-        ...(row.lastMessage && /^[a-f0-9]{64}$/i.test(row.lastMessage.hash || '') ? {
+        ...(row.day === today ? { ids } : {}),
+        ...(row.day === today && row.lastMessage && /^[a-f0-9]{64}$/i.test(row.lastMessage.hash || '') ? {
           lastMessage: {
             hash: row.lastMessage.hash,
             timestamp: String(row.lastMessage.timestamp || ''),
@@ -63,11 +72,32 @@
       format: 'wcounter-backup', version: 1,
       exportedAt: new Date().toISOString(),
       days
-    }, null, 2);
+    });
     const writable = await handle.createWritable();
     await writable.write(payload);
     await writable.close();
     await api.storage.local.set({ 'wcounter:backupStatus': 'synced' });
+  }
+  async function pruneExpiredHashes() {
+    const stored = await api.storage.local.get(DATA_KEY);
+    const days = stored[DATA_KEY] || {};
+    const today = todayKey();
+    let changed = false;
+    for (const row of Object.values(days)) {
+      if (row.day === today) continue;
+      if (row.ids || row.messageHashes || row.lastMessage) {
+        delete row.ids;
+        delete row.messageHashes;
+        delete row.lastMessage;
+        changed = true;
+      }
+    }
+    if (changed) await api.storage.local.set({ [DATA_KEY]: days });
+  }
+  function scheduleMidnightPrune() {
+    const now = new Date();
+    const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    api.alarms.create(MIDNIGHT_ALARM, { when: midnight.getTime() });
   }
   function queueBackup() {
     const task = writeQueue.then(saveBackup);
@@ -86,4 +116,21 @@
       return true;
     }
   });
+  api.alarms.onAlarm.addListener(alarm => {
+    if (alarm.name !== MIDNIGHT_ALARM) return;
+    pruneExpiredHashes().finally(() => {
+      queueBackup().catch(() => {});
+      scheduleMidnightPrune();
+    });
+  });
+  api.runtime.onStartup.addListener(() => {
+    scheduleMidnightPrune();
+    pruneExpiredHashes().finally(() => queueBackup().catch(() => {}));
+  });
+  api.runtime.onInstalled.addListener(() => {
+    scheduleMidnightPrune();
+    pruneExpiredHashes().finally(() => queueBackup().catch(() => {}));
+  });
+  scheduleMidnightPrune();
+  pruneExpiredHashes().finally(() => queueBackup().catch(() => {}));
 })();

@@ -146,17 +146,19 @@
   }
   async function safeBackupDays(source) {
     const result = {};
+    const currentDay = new Date();
+    const todayKey = `${currentDay.getFullYear()}-${String(currentDay.getMonth() + 1).padStart(2, '0')}-${String(currentDay.getDate()).padStart(2, '0')}`;
     const hash = async value => {
       const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
       return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
     };
     for (const [key, row] of Object.entries(source || {})) {
+      const oldHashes = row.day === todayKey && Array.isArray(row.messageHashes) ? row.messageHashes : [];
       result[key] = {
         chatId: row.chatId, chatName: row.chatName, day: row.day,
         sent: Number(row.sent) || 0, received: Number(row.received) || 0,
-        ids: await Promise.all((Array.isArray(row.ids) ? row.ids : []).map(id => /^[a-f0-9]{64}$/i.test(id) ? id : hash(id))),
-        messageHashes: Array.isArray(row.messageHashes) ? row.messageHashes.filter(value => /^[a-f0-9]{64}$/i.test(value)) : [],
-        ...(row.lastMessage && /^[a-f0-9]{64}$/i.test(row.lastMessage.hash || '') ? { lastMessage: row.lastMessage } : {})
+        ...(row.day === todayKey ? { ids: [...new Set(await Promise.all([...(Array.isArray(row.ids) ? row.ids : []), ...oldHashes].map(id => /^[a-f0-9]{64}$/i.test(id) ? id : hash(id))))] } : {}),
+        ...(row.day === todayKey && row.lastMessage && /^[a-f0-9]{64}$/i.test(row.lastMessage.hash || '') ? { lastMessage: row.lastMessage } : {})
       };
     }
     return result;
@@ -187,7 +189,7 @@
     try {
       const stored = await api.storage.local.get(KEY);
       const days = await safeBackupDays(stored[KEY]);
-      const blob = new Blob([JSON.stringify({ format: 'wcounter-backup', version: 1, exportedAt: new Date().toISOString(), days }, null, 2)], { type: 'application/json' });
+      const blob = new Blob([JSON.stringify({ format: 'wcounter-backup', version: 1, exportedAt: new Date().toISOString(), days })], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -208,5 +210,26 @@
     }
   });
   $('refresh').addEventListener('click', refreshChats);
+  $('reset-today').addEventListener('click', async () => {
+    const status = $('reset-status');
+    if (!selected) {
+      status.textContent = 'Seleziona prima una chat.';
+      return;
+    }
+    const key = `${selected.id}|${today}`;
+    const stored = await api.storage.local.get(KEY);
+    const days = stored[KEY] || {};
+    const row = days[key] || { chatId: selected.id, chatName: selected.name, day: today };
+    row.sent = 0;
+    row.received = 0;
+    row.ids = [];
+    delete row.messageHashes;
+    delete row.lastMessage;
+    days[key] = row;
+    await api.storage.local.set({ [KEY]: days });
+    try { await send({ type: 'wcounter:scan-now' }); } catch {}
+    status.textContent = 'Conteggio di oggi azzerato. Scorri la chat per ricontare i messaggi.';
+    await render();
+  });
   refreshChats();
 })();
