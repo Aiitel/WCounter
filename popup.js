@@ -155,6 +155,7 @@
         chatId: row.chatId, chatName: row.chatName, day: row.day,
         sent: Number(row.sent) || 0, received: Number(row.received) || 0,
         ids: await Promise.all((Array.isArray(row.ids) ? row.ids : []).map(id => /^[a-f0-9]{64}$/i.test(id) ? id : hash(id))),
+        messageHashes: Array.isArray(row.messageHashes) ? row.messageHashes.filter(value => /^[a-f0-9]{64}$/i.test(value)) : [],
         ...(row.lastMessage && /^[a-f0-9]{64}$/i.test(row.lastMessage.hash || '') ? { lastMessage: row.lastMessage } : {})
       };
     }
@@ -198,24 +199,12 @@
       status.textContent = 'Impossibile esportare il backup.';
     }
   });
-  $('import-history').addEventListener('click', () => $('history-file').click());
-  $('history-file').addEventListener('change', async event => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const status = $('backup-status');
+  $('import-history').addEventListener('click', async () => {
+    const returnTab = Number.isInteger(tabId) ? `?returnTab=${encodeURIComponent(tabId)}` : '';
     try {
-      const data = JSON.parse(await file.text());
-      if (data?.format !== 'wcounter-backup' || data.version !== 1 || !data.days || typeof data.days !== 'object' || Array.isArray(data.days)) {
-        throw new Error('Formato non valido');
-      }
-      if (!confirm('Il ripristino sostituirà lo storico presente nell’estensione. Vuoi continuare?')) return;
-      await api.storage.local.set({ [KEY]: data.days });
-      status.textContent = 'Storico ripristinato dal file.';
-      await render();
-    } catch {
-      status.textContent = 'File non valido o impossibile da leggere.';
+      await api.tabs.create({ url: `${api.runtime.getURL('import.html')}${returnTab}`, active: true });
     } finally {
-      event.target.value = '';
+      window.close();
     }
   });
   $('refresh').addEventListener('click', refreshChats);

@@ -37,6 +37,7 @@
         sent: Number(row.sent) || 0,
         received: Number(row.received) || 0,
         ids,
+        messageHashes: Array.isArray(row.messageHashes) ? row.messageHashes.filter(hash => /^[a-f0-9]{64}$/i.test(hash)) : [],
         ...(row.lastMessage && /^[a-f0-9]{64}$/i.test(row.lastMessage.hash || '') ? {
           lastMessage: {
             hash: row.lastMessage.hash,

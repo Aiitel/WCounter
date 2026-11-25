@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Ripristina storico WCounter</title>
+  <link rel="stylesheet" href="import.css">
+</head>
+<body>
+  <main>
+    <h1>Ripristina storico</h1>
+    <p>Scegli il file JSON di WCounter. I dati verranno uniti allo storico presente; i messaggi già conteggiati non verranno duplicati.</p>
+    <label class="button" for="backup-file">Scegli file di backup</label>
+    <input id="backup-file" type="file" accept="application/json,.json">
+    <div id="status" aria-live="polite">Nessun file caricato.</div>
+    <a href="popup.html">Torna a WCounter</a>
+  </main>
+  <script src="import.js"></script>
+</body>
+</html>

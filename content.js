@@ -188,9 +188,17 @@
         if (!Array.isArray(row.ids)) row.ids = [];
         const rawDedupeId = `${direction}:${messageId}`;
         const dedupeId = await sha256(rawDedupeId);
-        if (row.ids.includes(dedupeId)) continue;
         const timestamp = messageTimestamp(meta, day);
         const textHash = await sha256(clean(el.textContent).normalize('NFKC'));
+        const messageHash = await sha256(`${direction}|${timestamp}|${messageId}|${textHash}`);
+        if (!Array.isArray(row.messageHashes)) row.messageHashes = [];
+        if (row.messageHashes.includes(messageHash)) continue;
+        if (row.ids.includes(dedupeId)) {
+          row.messageHashes.push(messageHash);
+          days[key] = row;
+          changed = true;
+          continue;
+        }
         if (row.lastMessage?.timestamp === timestamp && row.lastMessage?.hash === textHash && row.lastMessage?.direction === direction) {
           row.ids.push(dedupeId);
           days[key] = row;
@@ -209,6 +217,7 @@
           continue;
         }
         row.ids.push(dedupeId);
+        row.messageHashes.push(messageHash);
         row[direction]++;
         if (!row.lastMessage || timestamp >= row.lastMessage.timestamp) {
           row.lastMessage = { hash: textHash, timestamp, direction };
