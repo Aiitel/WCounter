@@ -1,0 +1,38 @@
+﻿{
+    "manifest_version":  3,
+    "name":  "WCounter",
+    "version":  "1.2.2",
+    "description":  "Conta i messaggi inviati e ricevuti in una chat WhatsApp selezionata.",
+    "permissions":  [
+                        "storage",
+                        "activeTab"
+                    ],
+    "host_permissions":  [
+                             "https://web.whatsapp.com/*"
+                         ],
+    "action":  {
+                   "default_title":  "WCounter",
+                   "default_popup":  "popup.html"
+               },
+    "background": {
+                   "scripts": ["background.js"],
+                   "service_worker": "background.js"
+                },
+    "content_scripts":  [
+                            {
+                                "matches":  [
+                                                "https://web.whatsapp.com/*"
+                                            ],
+                                "js":  [
+                                           "content.js"
+                                       ],
+                                "run_at":  "document_idle"
+                            }
+                        ],
+    "browser_specific_settings":  {
+                                      "gecko":  {
+                                                    "id":  "wcounter@local",
+                                                    "strict_min_version":  "109.0"
+                                                }
+                                  }
+}

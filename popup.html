@@ -1,0 +1,25 @@
+﻿<!doctype html>
+<html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>WCounter</title><link rel="stylesheet" href="popup.css"></head>
+<body>
+  <header><div class="brand">WCounter</div><div class="subtitle">Conteggio per chat</div></header>
+  <main>
+    <label for="chat-select">Chat da registrare</label>
+    <div class="select-line"><select id="chat-select"><option value="">Apri WhatsApp Web per caricare le chat</option></select><button id="refresh" title="Aggiorna elenco">↻</button></div>
+    <nav aria-label="Sezioni"><button class="tab active" data-tab="today">Oggi</button><button class="tab" data-tab="history">Storico</button><button class="tab" data-tab="settings">Impostazioni</button></nav>
+    <section id="today" class="panel"><div class="date" id="today-date"></div><div class="total" id="today-count">0</div><div class="caption">messaggi totali</div><div class="breakdown"><span>Inviati <b id="sent-count">0</b></span><span>Ricevuti <b id="received-count">0</b></span></div></section>
+    <section id="history" class="panel hidden">
+      <div class="history-toolbar"><strong>Storico</strong><button id="calendar-toggle" title="Apri calendario" aria-expanded="false">▦</button></div>
+      <div id="calendar" class="calendar hidden"><div class="calendar-head"><button id="month-prev" aria-label="Mese precedente">‹</button><strong id="month-label"></strong><button id="month-next" aria-label="Mese successivo">›</button></div><div class="calendar-grid" id="calendar-grid"></div></div>
+      <div class="history-head"><span>Giornata</span><span>Inviati</span><span>Ricevuti</span><span>Totale</span></div><div id="rows"></div><div id="empty" class="empty hidden">Nessun messaggio registrato per questa chat.</div>
+    </section>
+    <section id="settings" class="panel hidden">
+      <div class="settings-title">Backup dello storico</div>
+      <p class="settings-copy">Chrome: scegli un file una volta e WCounter lo aggiorna a ogni conteggio. Firefox: usa il salvataggio manuale, perché non consente l’aggiornamento automatico di un file scelto.</p>
+      <button id="export-history" class="settings-button">Scegli file e attiva backup</button>
+      <button id="manual-export" class="settings-button secondary">Esporta una copia manuale</button>
+      <button id="import-history" class="settings-button secondary">Ripristina da file</button>
+      <input id="history-file" type="file" accept="application/json,.json" hidden>
+      <div id="backup-status" class="backup-status" aria-live="polite"></div>
+    </section>
+  </main><script src="popup.js"></script>
+</body></html>
